@@ -307,6 +307,19 @@ def get_svg_download_link(svg_string, filename, text):
 
 def main():
     st.title("Circuit Pattern Generator")
+    
+    # Add custom CSS for color pickers
+    st.markdown("""
+    <style>
+    .stColorPicker {
+        width: 100% !important;
+    }
+    .stColorPicker > label {
+        min-height: 40px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
     st.sidebar.header("Pattern Parameters")
     
     # Fixed grid size
@@ -325,18 +338,21 @@ def main():
     st.sidebar.text(f"Canvas: {width}px × {height}px")
     st.sidebar.text(f"Grid: {grid_cols}×{grid_rows} = {grid_cols * grid_rows} cells")
     
-    # Debug grid option
-    show_grid = st.sidebar.checkbox("Show Debug Grid", value=False)
-    grid_color = "#FF0000"  # Red grid
-    
-    # Color controls
+    # Color controls side by side with fixed layout
     st.sidebar.subheader("Colors")
-    track_color = st.sidebar.color_picker("Track Color", "#FFFFFF")
-    background_color = st.sidebar.color_picker("Background Color", "#000000")
+    
+    # Use equal width columns
+    col1, col2 = st.sidebar.columns([1, 1])
+    
+    # Place color pickers in columns with fixed heights
+    with col1:
+        track_color = st.color_picker("Track Color", "#FFFFFF")
+    with col2:
+        background_color = st.color_picker("Background Color", "#000000")
     
     # Ball size control
     st.sidebar.subheader("Ball Properties")
-    ball_diameter_percent = st.sidebar.slider("Ball Diameter (%)", min_value=5, max_value=100, value=15,
+    ball_diameter_percent = st.sidebar.slider("Ball Diameter (%)", min_value=5, max_value=100, value=60,
                                      help="Percentage of maximum ball diameter (95% of grid)")
     
     # Calculate actual ball diameter for display
@@ -346,7 +362,7 @@ def main():
     
     # Track controls
     st.sidebar.subheader("Track Properties")
-    track_width_percent = st.sidebar.slider("Track Width (%)", min_value=5, max_value=90, value=40,
+    track_width_percent = st.sidebar.slider("Track Width (%)", min_value=5, max_value=90, value=60,
                                          help="Percentage of ball diameter")
     
     # Calculate actual track width for display
@@ -380,6 +396,11 @@ def main():
     
     random.seed(st.session_state.seed)
     
+    # Debug grid option moved to bottom of UI
+    st.sidebar.subheader("Debug Options")
+    show_grid = st.sidebar.checkbox("Show Debug Grid", value=False)
+    grid_color = "#FF0000"  # Red grid
+    
     # Generate the pattern
     try:
         dwg, svg_string = generate_mask_pattern(
@@ -403,25 +424,32 @@ def main():
         # Show info about the grid and target filled
         st.sidebar.text(f"Target filled: {int(grid_cols * grid_rows * density_percent/100)} cells")
         
-        # Create a container to display the SVG
+        # Calculate preview size based on available width
+        # Get available width from streamlit container (approximate)
+        available_width = 700  # Approximate default content width in pixels
+        
+        # Calculate a height that maintains the aspect ratio
+        aspect_ratio = height / width
+        display_width = min(available_width, width)
+        display_height = int(display_width * aspect_ratio)
+        
+        # Ensure height is reasonable (not too tall or too short)
+        display_height = min(800, max(300, display_height))
+        
+        # Create container with properly sized SVG
         st.markdown(f"""
         <div style="background-color: {background_color}; padding: 10px; border-radius: 5px; 
-                    width: 100%; height: 500px; overflow: auto; text-align: center;">
-            {svg_string}
+                    width: {display_width}px; height: {display_height}px; margin: 0 auto; 
+                    overflow: auto; text-align: center;">
+            <svg width="{display_width}" height="{display_height}" viewBox="0 0 {width} {height}" 
+                 preserveAspectRatio="xMidYMid meet">
+                {svg_string[svg_string.find('>')+1:]}
+            </svg>
         </div>
         """, unsafe_allow_html=True)
         
-        # Download link
+        # Download SVG
         st.markdown(get_svg_download_link(svg_string, "circuit_pattern", "Download SVG"), unsafe_allow_html=True)
-        
-        # Guide for converting to PNG
-        st.markdown("""
-        ### Convert to PNG
-        To convert the SVG to PNG for use in Substance Painter:
-        1. Download the SVG file above
-        2. Use an online converter like [SVG to PNG](https://svgtopng.com/)
-        3. Or use an image editor like Inkscape or Adobe Illustrator
-        """)
         
     except Exception as e:
         st.error(f"Error generating pattern: {e}")
