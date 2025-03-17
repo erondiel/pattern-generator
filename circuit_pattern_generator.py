@@ -3,6 +3,11 @@ import random
 import base64
 import math
 from svgwrite import Drawing
+from enum import Enum
+
+class PatternType(Enum):
+    CIRCUIT = "Circuit Pattern"
+    BOTTOM_UP = "Bottom-Up Pattern"
 
 def line_segments_intersect(line1, line2):
     """Check if two line segments intersect"""
@@ -22,13 +27,13 @@ def line_segments_intersect(line1, line2):
     # If ua and ub are between 0 and 1, segments intersect
     return 0 <= ua <= 1 and 0 <= ub <= 1
 
-def generate_mask_pattern(width=800, height=600, 
+def generate_circuit_pattern(width, height, 
                          track_color="#FFFFFF", background_color="#000000", 
-                         track_width_percent=10, min_track_length=2, max_track_length=8,
-                         ball_diameter_percent=15, density_percent=70, overlap_probability=0.0,
+                         track_width_percent=60, min_track_length=2, max_track_length=8,
+                         ball_diameter_percent=60, density_percent=70, overlap_probability=0.0,
                          show_grid=False, grid_color="#FF0000"):
     """
-    Generate circuit pattern SVG with the specified parameters
+    Generate classic circuit pattern SVG with the specified parameters
     
     Returns the SVG drawing object and the SVG string
     """
@@ -299,6 +304,250 @@ def generate_mask_pattern(width=800, height=600,
     svg_string = dwg.tostring()
     return dwg, svg_string
 
+def generate_bottom_up_pattern(width, height, 
+                              track_color="#FFFFFF", background_color="#000000", 
+                              track_width_percent=60, 
+                              segment1_min_length=80, segment1_max_length=200,
+                              segment2_percent_min=50, segment2_percent_max=100,
+                              segment3_percent_min=50, segment3_percent_max=100,
+                              num_segments_min=1, num_segments_max=3,
+                              ball_diameter_percent=60, density_percent=70, 
+                              overlap_probability=0.0,
+                              show_grid=False, grid_color="#FF0000"):
+    """
+    Generate bottom-up pattern SVG with the specified parameters.
+    Lines start from the bottom with 1-3 segments, turning at 45-degree angles.
+    First segment is always vertical, second segment only turns 45 degrees.
+    When 3 segments are present, the 3rd is parallel to the 1st.
+    
+    Returns the SVG drawing object and the SVG string
+    """
+    # Create SVG drawing
+    dwg = Drawing(size=(width, height), profile='tiny')
+    
+    # Add background
+    dwg.add(dwg.rect(insert=(0, 0), size=(width, height), fill=background_color))
+    
+    # Create a group for the pattern
+    pattern_group = dwg.g()
+    
+    # Calculate grid size and actual sizes in pixels
+    grid_size = 40  # Fixed grid size
+    # Make sure the max ball diameter is 95% of grid_size
+    max_ball_diameter = int(grid_size * 0.95)
+    ball_diameter = int(max_ball_diameter * (ball_diameter_percent / 100))
+    track_width = int(ball_diameter * (track_width_percent / 100))
+    
+    # Calculate ball radius for drawing (half of diameter)
+    ball_radius = ball_diameter / 2
+    
+    # Enforce minimum sizes
+    ball_radius = max(1, ball_radius)
+    track_width = max(1, track_width)
+    
+    # Draw debug grid if requested
+    if show_grid:
+        grid_group = dwg.g(stroke=grid_color, stroke_width=1, stroke_opacity=0.5)
+        # Draw vertical grid lines
+        for x in range(grid_size, width, grid_size):
+            grid_group.add(dwg.line(start=(x, 0), end=(x, height)))
+        # Draw horizontal grid lines
+        for y in range(grid_size, height, grid_size):
+            grid_group.add(dwg.line(start=(0, y), end=(width, y)))
+        dwg.add(grid_group)
+    
+    # Possible directions in 45 degree increments
+    directions = [
+        (1, 0),    # 0 degrees - right
+        (1, -1),   # 45 degrees - up-right
+        (0, -1),   # 90 degrees - up
+        (-1, -1),  # 135 degrees - up-left
+        (-1, 0),   # 180 degrees - left
+        (-1, 1),   # 225 degrees - down-left
+        (0, 1),    # 270 degrees - down
+        (1, 1)     # 315 degrees - down-right
+    ]
+    
+    # Set of occupied positions to avoid overlaps
+    occupied_positions = set()
+    track_segments = []
+    
+    # Calculate number of starting points based on density
+    available_width = width - 2 * grid_size
+    num_starting_points = int((available_width / grid_size) * (density_percent / 100))
+    num_starting_points = max(1, min(num_starting_points, int(available_width / grid_size)))
+    
+    # Calculate starting point spacing
+    spacing = available_width / num_starting_points
+    
+    # Generate starting points at the bottom of the pattern
+    starting_points = []
+    for i in range(num_starting_points):
+        x = grid_size + int(i * spacing)
+        y = height - grid_size
+        starting_points.append((x, y))
+    
+    # Shuffle starting points for random distribution
+    random.shuffle(starting_points)
+    
+    # Generate paths from each starting point
+    for start_x, start_y in starting_points:
+        # Determine number of segments for this path (1-3)
+        num_segments = random.randint(num_segments_min, num_segments_max)
+        
+        # Initialize path
+        path_points = [(start_x, start_y)]
+        current_x, current_y = start_x, start_y
+        
+        # Track which directions we're using
+        used_directions = []
+        
+        # First segment - always vertical (up direction)
+        first_dir_idx = 2  # Index for (0, -1) - upward direction
+        dx, dy = directions[first_dir_idx]
+        used_directions.append(first_dir_idx)
+        
+        # First segment length
+        segment1_length = random.randint(segment1_min_length, segment1_max_length)
+        
+        # Calculate end point of first segment
+        next_x = current_x + dx * segment1_length
+        next_y = current_y + dy * segment1_length
+        
+        # Ensure we stay within bounds
+        if next_x < grid_size:
+            next_x = grid_size
+        elif next_x > width - grid_size:
+            next_x = width - grid_size
+            
+        if next_y < grid_size:
+            next_y = grid_size
+        
+        # Add first segment
+        path_points.append((next_x, next_y))
+        current_x, current_y = next_x, next_y
+        
+        # If we need more than one segment
+        if num_segments > 1:
+            # Second segment turns exactly 45 degrees from first (not 90)
+            turn_amount = random.choice([-1, 1])  # Only 45 degree turns
+            second_dir_idx = (first_dir_idx + turn_amount) % 8
+            dx, dy = directions[second_dir_idx]
+            used_directions.append(second_dir_idx)
+            
+            # Second segment length (percentage of first)
+            segment2_percent = random.randint(segment2_percent_min, segment2_percent_max)
+            segment2_length = int(segment1_length * (segment2_percent / 100))
+            
+            # Calculate end point of second segment
+            next_x = current_x + dx * segment2_length
+            next_y = current_y + dy * segment2_length
+            
+            # Ensure we stay within bounds
+            if next_x < grid_size:
+                next_x = grid_size
+            elif next_x > width - grid_size:
+                next_x = width - grid_size
+                
+            if next_y < grid_size:
+                next_y = grid_size
+            elif next_y > height - grid_size:
+                next_y = height - grid_size
+            
+            # Add second segment
+            path_points.append((next_x, next_y))
+            current_x, current_y = next_x, next_y
+            
+            # If we need a third segment
+            if num_segments > 2:
+                # Third segment is parallel to first (same direction)
+                dx, dy = directions[first_dir_idx]
+                
+                # Third segment length (percentage of first)
+                segment3_percent = random.randint(segment3_percent_min, segment3_percent_max)
+                segment3_length = int(segment1_length * (segment3_percent / 100))
+                
+                # Calculate end point of third segment
+                next_x = current_x + dx * segment3_length
+                next_y = current_y + dy * segment3_length
+                
+                # Ensure we stay within bounds
+                if next_x < grid_size:
+                    next_x = grid_size
+                elif next_x > width - grid_size:
+                    next_x = width - grid_size
+                    
+                if next_y < grid_size:
+                    next_y = grid_size
+                elif next_y > height - grid_size:
+                    next_y = height - grid_size
+                
+                # Add third segment
+                path_points.append((next_x, next_y))
+        
+        # Draw all segments as lines
+        segments_to_draw = []
+        for i in range(len(path_points) - 1):
+            x1, y1 = path_points[i]
+            x2, y2 = path_points[i + 1]
+            new_segment = (x1, y1, x2, y2)
+            
+            # Check for intersections if overlap probability is zero
+            if overlap_probability == 0.0:
+                segment_intersection = False
+                for segment in track_segments:
+                    if line_segments_intersect(new_segment, segment):
+                        segment_intersection = True
+                        # Only skip if random check passes based on overlap probability
+                        if random.random() > overlap_probability:
+                            break
+                
+                if segment_intersection:
+                    continue  # Skip this segment if it intersects
+            
+            segments_to_draw.append(new_segment)
+            track_segments.append(new_segment)
+            
+            # Add to occupied points for collision detection
+            occupied_positions.add((x1, y1))
+            occupied_positions.add((x2, y2))
+        
+        # Draw the segments
+        for x1, y1, x2, y2 in segments_to_draw:
+            pattern_group.add(dwg.line(
+                start=(x1, y1),
+                end=(x2, y2),
+                stroke=track_color,
+                stroke_width=track_width,
+                stroke_linecap="round"
+            ))
+        
+        # Add ball at the end of the path
+        end_x, end_y = path_points[-1]
+        pattern_group.add(dwg.circle(
+            center=(end_x, end_y), 
+            r=ball_radius,
+            fill=track_color
+        ))
+    
+    # Add the pattern group to the drawing
+    dwg.add(pattern_group)
+    
+    # Return the drawing object and SVG string
+    svg_string = dwg.tostring()
+    return dwg, svg_string
+
+def generate_mask_pattern(pattern_type=PatternType.CIRCUIT, **kwargs):
+    """
+    Generate a pattern based on the selected pattern type
+    """
+    if pattern_type == PatternType.CIRCUIT:
+        return generate_circuit_pattern(**kwargs)
+    elif pattern_type == PatternType.BOTTOM_UP:
+        return generate_bottom_up_pattern(**kwargs)
+    else:
+        raise ValueError(f"Unknown pattern type: {pattern_type}")
+
 def get_svg_download_link(svg_string, filename, text):
     """Generate a link to download SVG"""
     b64 = base64.b64encode(svg_string.encode()).decode()
@@ -321,6 +570,13 @@ def main():
     """, unsafe_allow_html=True)
     
     st.sidebar.header("Pattern Parameters")
+    
+    # Pattern type selection
+    pattern_type = st.sidebar.radio(
+        "Pattern Type",
+        [PatternType.CIRCUIT.value, PatternType.BOTTOM_UP.value]
+    )
+    pattern_type = PatternType.CIRCUIT if pattern_type == PatternType.CIRCUIT.value else PatternType.BOTTOM_UP
     
     # Fixed grid size
     grid_size = 40  # pixels
@@ -369,22 +625,79 @@ def main():
     actual_track_width = int(actual_ball_diameter * (track_width_percent / 100))
     st.sidebar.text(f"Track width: {actual_track_width}px")
     
-    col1, col2 = st.sidebar.columns(2)
-    min_track_length = col1.number_input("Min Track Length", min_value=1, max_value=10, value=2)
-    max_track_length = col2.number_input("Max Track Length", min_value=2, max_value=20, value=8)
-    
-    # Ensure min_track_length <= max_track_length
-    if min_track_length > max_track_length:
-        max_track_length = min_track_length
-        st.sidebar.warning("Min track length cannot be greater than max track length")
-    
-    # Density and pattern controls
-    st.sidebar.subheader("Pattern Properties")
-    density_percent = st.sidebar.slider("Density (%)", min_value=1, max_value=100, value=70, 
-                                      help="Percentage of grid slots to fill with tracks")
-    
-    overlap_probability = st.sidebar.slider("Overlap Probability", min_value=0.0, max_value=1.0, value=0.0, step=0.05, 
-                                          help="0 = No overlaps, 1 = Always allow overlaps")
+    # Pattern-specific controls
+    if pattern_type == PatternType.CIRCUIT:
+        # Circuit Pattern specific controls
+        col1, col2 = st.sidebar.columns(2)
+        min_track_length = col1.number_input("Min Track Length", min_value=1, max_value=10, value=2)
+        max_track_length = col2.number_input("Max Track Length", min_value=2, max_value=20, value=8)
+        
+        # Ensure min_track_length <= max_track_length
+        if min_track_length > max_track_length:
+            max_track_length = min_track_length
+            st.sidebar.warning("Min track length cannot be greater than max track length")
+        
+        # Density and pattern controls
+        st.sidebar.subheader("Pattern Properties")
+        density_percent = st.sidebar.slider("Density (%)", min_value=1, max_value=100, value=70, 
+                                          help="Percentage of grid slots to fill with tracks")
+        
+        overlap_probability = st.sidebar.slider("Overlap Probability", min_value=0.0, max_value=1.0, value=0.0, step=0.05, 
+                                              help="0 = No overlaps, 1 = Always allow overlaps")
+        
+    else: # Bottom-up pattern
+        # Bottom-up Pattern specific controls
+        st.sidebar.subheader("Segment Properties")
+        
+        col1, col2 = st.sidebar.columns(2)
+        with col1:
+            segment1_min_length = st.number_input("Segment 1 Min Length", min_value=20, max_value=300, value=80)
+        with col2:
+            segment1_max_length = st.number_input("Segment 1 Max Length", min_value=50, max_value=400, value=200)
+        
+        if segment1_min_length > segment1_max_length:
+            segment1_max_length = segment1_min_length
+            st.sidebar.warning("Min segment length cannot be greater than max segment length")
+        
+        col1, col2 = st.sidebar.columns(2)
+        with col1:
+            segment2_percent_min = st.number_input("Segment 2 Min %", min_value=10, max_value=200, value=50,
+                                                 help="Min percentage of first segment length")
+        with col2:
+            segment2_percent_max = st.number_input("Segment 2 Max %", min_value=20, max_value=200, value=100,
+                                                 help="Max percentage of first segment length")
+        
+        if segment2_percent_min > segment2_percent_max:
+            segment2_percent_max = segment2_percent_min
+            st.sidebar.warning("Min segment 2 % cannot be greater than max segment 2 %")
+        
+        col1, col2 = st.sidebar.columns(2)
+        with col1:
+            segment3_percent_min = st.number_input("Segment 3 Min %", min_value=10, max_value=200, value=50,
+                                                 help="Min percentage of first segment length")
+        with col2:
+            segment3_percent_max = st.number_input("Segment 3 Max %", min_value=20, max_value=200, value=100,
+                                                 help="Max percentage of first segment length")
+        
+        if segment3_percent_min > segment3_percent_max:
+            segment3_percent_max = segment3_percent_min
+            st.sidebar.warning("Min segment 3 % cannot be greater than max segment 3 %")
+        
+        # Number of segments
+        col1, col2 = st.sidebar.columns(2)
+        with col1:
+            num_segments_min = st.number_input("Min Segments", min_value=1, max_value=3, value=1)
+        with col2:
+            num_segments_max = st.number_input("Max Segments", min_value=1, max_value=3, value=3)
+        
+        if num_segments_min > num_segments_max:
+            num_segments_max = num_segments_min
+            st.sidebar.warning("Min segments cannot be greater than max segments")
+        
+        # Density control
+        st.sidebar.subheader("Pattern Properties")
+        density_percent = st.sidebar.slider("Density (%)", min_value=1, max_value=100, value=70, 
+                                          help="Percentage of available space to fill with lines")
     
     # Generate button
     if st.sidebar.button("Generate New Pattern"):
@@ -403,26 +716,52 @@ def main():
     
     # Generate the pattern
     try:
-        dwg, svg_string = generate_mask_pattern(
-            width=width, 
-            height=height,
-            track_color=track_color,
-            background_color=background_color,
-            track_width_percent=track_width_percent,
-            min_track_length=min_track_length,
-            max_track_length=max_track_length,
-            ball_diameter_percent=ball_diameter_percent,
-            density_percent=density_percent,
-            overlap_probability=overlap_probability,
-            show_grid=show_grid,
-            grid_color=grid_color
-        )
+        if pattern_type == PatternType.CIRCUIT:
+            # Generate the circuit pattern
+            dwg, svg_string = generate_mask_pattern(
+                pattern_type=PatternType.CIRCUIT,
+                width=width, 
+                height=height,
+                track_color=track_color,
+                background_color=background_color,
+                track_width_percent=track_width_percent,
+                min_track_length=min_track_length,
+                max_track_length=max_track_length,
+                ball_diameter_percent=ball_diameter_percent,
+                density_percent=density_percent,
+                overlap_probability=overlap_probability,
+                show_grid=show_grid,
+                grid_color=grid_color
+            )
+        else:
+            # Generate the bottom-up pattern
+            dwg, svg_string = generate_mask_pattern(
+                pattern_type=PatternType.BOTTOM_UP,
+                width=width, 
+                height=height,
+                track_color=track_color,
+                background_color=background_color,
+                track_width_percent=track_width_percent,
+                segment1_min_length=segment1_min_length,
+                segment1_max_length=segment1_max_length,
+                segment2_percent_min=segment2_percent_min,
+                segment2_percent_max=segment2_percent_max,
+                segment3_percent_min=segment3_percent_min,
+                segment3_percent_max=segment3_percent_max,
+                num_segments_min=num_segments_min,
+                num_segments_max=num_segments_max,
+                ball_diameter_percent=ball_diameter_percent,
+                density_percent=density_percent,
+                show_grid=show_grid,
+                grid_color=grid_color
+            )
         
         # Display current seed
         st.sidebar.text(f"Current Seed: {st.session_state.seed}")
         
-        # Show info about the grid and target filled
-        st.sidebar.text(f"Target filled: {int(grid_cols * grid_rows * density_percent/100)} cells")
+        # Show info about the grid
+        if pattern_type == PatternType.CIRCUIT:
+            st.sidebar.text(f"Target filled: {int(grid_cols * grid_rows * density_percent/100)} cells")
         
         # Calculate preview size based on available width
         # Get available width from streamlit container (approximate)
@@ -449,7 +788,8 @@ def main():
         """, unsafe_allow_html=True)
         
         # Download SVG
-        st.markdown(get_svg_download_link(svg_string, "circuit_pattern", "Download SVG"), unsafe_allow_html=True)
+        pattern_type_text = "circuit" if pattern_type == PatternType.CIRCUIT else "bottom_up"
+        st.markdown(get_svg_download_link(svg_string, f"{pattern_type_text}_pattern", f"Download {pattern_type.value} SVG"), unsafe_allow_html=True)
         
     except Exception as e:
         st.error(f"Error generating pattern: {e}")
