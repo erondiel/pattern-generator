@@ -111,7 +111,7 @@ def main():
         
         col1, col2 = st.sidebar.columns(2)
         with col1:
-            segment1_min_percent = st.number_input("Segment 1 Min %", min_value=30, max_value=80, value=50,
+            segment1_min_percent = st.number_input("Segment 1 Min %", min_value=15, max_value=80, value=20,
                                                 help="Min percentage of max total length (80% of vertical size)")
         with col2:
             segment1_max_percent = st.number_input("Segment 1 Max %", min_value=40, max_value=90, value=70,
@@ -138,7 +138,7 @@ def main():
             segment3_min_percent = st.number_input("Segment 3 Min %", min_value=5, max_value=40, value=15,
                                                 help="Min percentage of first segment length")
         with col2:
-            segment3_max_percent = st.number_input("Segment 3 Max %", min_value=10, max_value=50, value=30,
+            segment3_max_percent = st.number_input("Segment 3 Max %", min_value=10, max_value=100, value=30,
                                                 help="Max percentage of first segment length")
         
         if segment3_min_percent > segment3_max_percent:
@@ -251,7 +251,8 @@ def main():
         
         # Download SVG
         pattern_type_text = "circuit" if pattern_type == PatternType.CIRCUIT else "bottom_up"
-        st.markdown(get_svg_download_link(svg_string, f"{pattern_type_text}_pattern", f"Download {pattern_type.value} SVG"), unsafe_allow_html=True)
+        download_filename = f"{pattern_type_text}_pattern_seed_{st.session_state.seed}"
+        st.markdown(get_svg_download_link(svg_string, download_filename, f"Download {pattern_type.value} SVG"), unsafe_allow_html=True)
         
     except Exception as e:
         st.error(f"Error generating pattern: {e}")

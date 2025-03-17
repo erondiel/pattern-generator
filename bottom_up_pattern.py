@@ -153,189 +153,134 @@ def generate_bottom_up_pattern(width, height,
         
         # Generate lines at calculated positions
         for i in random_indices:
-            current_x = x_positions[i]
+            original_x = x_positions[i]
+            current_x = original_x
             
-            # Determine number of segments based on segment_complexity (0-1 slider)
-            # 0 = always 1 segment, 1 = up to 3 segments based on probability
-            max_possible_segments = 3
+            # Maximum allowed x-shift to avoid collisions
+            max_shift_distance = min_spacing * 0.8
             
-            # Calculate segment probabilities based on complexity
-            if segment_complexity <= 0:
-                # Always just 1 segment
-                num_segments = 1
-            else:
-                # Use probabilistic approach based on complexity
-                segment_probs = [
-                    1.0,  # Probability of at least 1 segment (always 100%)
-                    segment_complexity,  # Probability of at least 2 segments
-                    segment_complexity * 0.7  # Probability of 3 segments (70% of complexity)
-                ]
+            # Try up to 5 positions (original plus 4 shifted positions)
+            for shift_attempt in range(5):
+                # Skip if we're already trying the original position
+                if shift_attempt > 0:
+                    # Alternate shifting left and right with increasing distance
+                    shift_direction = 1 if shift_attempt % 2 == 0 else -1
+                    shift_magnitude = (shift_attempt + 1) // 2 * (max_shift_distance / 2)
+                    
+                    # Apply shift but keep within borders
+                    current_x = original_x + (shift_direction * shift_magnitude)
+                    current_x = max(left_border, min(right_border, current_x))
                 
-                # Determine the maximum number of segments for this line
-                threshold = random.random()
-                num_segments = 1
-                for idx in range(1, max_possible_segments):
-                    if threshold <= segment_probs[idx]:
-                        num_segments = idx + 1
-            
-            # Starting point at the bottom
-            start_y = height - grid_size
-            
-            # Initialize path
-            path_points = [(current_x, start_y)]
-            pos_x, pos_y = current_x, start_y
-            
-            # List to hold all segments for this path
-            path_segments = []
-            
-            # First segment - always vertical (up direction)
-            first_dir_idx = 2  # Index for (0, -1) - upward direction
-            dx, dy = directions[first_dir_idx]
-            
-            # Calculate segment lengths based on percentages of max_total_length
-            # For the first segment, use the specified min/max percentages
-            segment1_percent = random.randint(segment1_min_percent, segment1_max_percent)
-            segment1_length = int(max_total_length * (segment1_percent / 100))
-            
-            # Ensure length is at least 10 pixels
-            segment1_length = max(10, segment1_length)
-            
-            # Calculate end point of first segment
-            next_x = pos_x + dx * segment1_length
-            next_y = pos_y + dy * segment1_length
-            
-            # Ensure we stay within bounds
-            if next_y < grid_size:
-                next_y = grid_size
-                segment1_length = pos_y - next_y  # Recalculate actual length after bounds check
-            
-            # Add first segment
-            path_points.append((next_x, next_y))
-            first_segment = (pos_x, pos_y, next_x, next_y)
-            
-            # Check if first segment would overlap with any existing element
-            segment_collision = check_segment_collision(
-                first_segment, 
-                track_segments, 
-                balls, 
-                track_width, 
-                min_element_distance
-            )
-            
-            if segment_collision:
-                # Skip this line if it would collide
-                continue
-            
-            # First segment is valid, add it
-            path_segments.append(first_segment)
-            pos_x, pos_y = next_x, next_y
-            
-            # Track remaining length for the path (max_total_length - segment1_length)
-            remaining_length = max_total_length - segment1_length
-            
-            # If we need more than one segment
-            if num_segments > 1 and remaining_length > 10:  # Only add more segments if enough length remains
-                # Check both possible 45-degree turns (-1 for left, 1 for right)
-                turn_directions = [-1, 1]
-                random.shuffle(turn_directions)  # Randomize which direction to try first
+                # Determine number of segments based on segment_complexity (0-1 slider)
+                # 0 = always 1 segment, 1 = always 3 segments
+                max_possible_segments = 3
                 
-                second_segment_added = False
+                # Calculate segment probabilities based on complexity
+                if segment_complexity <= 0:
+                    # Always just 1 segment
+                    num_segments = 1
+                elif segment_complexity >= 1.0:
+                    # Always use all 3 segments when complexity is at max
+                    num_segments = 3
+                else:
+                    # Use probabilistic approach based on complexity
+                    segment_probs = [
+                        1.0,  # Probability of at least 1 segment (always 100%)
+                        segment_complexity,  # Probability of at least 2 segments
+                        segment_complexity * segment_complexity  # Probability of 3 segments (quadratic scaling with complexity)
+                    ]
+                    
+                    # Determine the maximum number of segments for this line
+                    threshold = random.random()
+                    num_segments = 1
+                    for idx in range(1, max_possible_segments):
+                        if threshold <= segment_probs[idx]:
+                            num_segments = idx + 1
                 
-                # Try each direction until one works
-                for turn_amount in turn_directions:
-                    if second_segment_added:
-                        break
+                # Starting point at the bottom
+                start_y = height - grid_size
+                
+                # Initialize path
+                path_points = [(current_x, start_y)]
+                pos_x, pos_y = current_x, start_y
+                
+                # List to hold all segments for this path
+                path_segments = []
+                
+                # First segment - always vertical (up direction)
+                first_dir_idx = 2  # Index for (0, -1) - upward direction
+                dx, dy = directions[first_dir_idx]
+                
+                # Calculate segment lengths based on percentages of max_total_length
+                # For the first segment, use the specified min/max percentages
+                segment1_percent = random.randint(segment1_min_percent, segment1_max_percent)
+                segment1_length = int(max_total_length * (segment1_percent / 100))
+                
+                # Ensure length is at least 10 pixels
+                segment1_length = max(10, segment1_length)
+                
+                # Calculate end point of first segment
+                next_x = pos_x + dx * segment1_length
+                next_y = pos_y + dy * segment1_length
+                
+                # Ensure we stay within bounds
+                if next_y < grid_size:
+                    next_y = grid_size
+                    segment1_length = pos_y - next_y  # Recalculate actual length after bounds check
+                
+                # Add first segment
+                path_points.append((next_x, next_y))
+                first_segment = (pos_x, pos_y, next_x, next_y)
+                
+                # Check if first segment would overlap with any existing element
+                segment_collision = check_segment_collision(
+                    first_segment, 
+                    track_segments, 
+                    balls, 
+                    track_width, 
+                    min_element_distance
+                )
+                
+                if segment_collision:
+                    # Try another shift position
+                    continue
+                
+                # First segment is valid, add it
+                path_segments.append(first_segment)
+                pos_x, pos_y = next_x, next_y
+                
+                # Track remaining length for the path (max_total_length - segment1_length)
+                remaining_length = max_total_length - segment1_length
+                
+                # If we need more than one segment
+                if num_segments > 1 and remaining_length > 10:  # Only add more segments if enough length remains
+                    # Check both possible 45-degree turns (-1 for left, 1 for right)
+                    turn_directions = [-1, 1]
+                    random.shuffle(turn_directions)  # Randomize which direction to try first
+                    
+                    second_segment_added = False
+                    
+                    # Try each direction until one works
+                    for turn_amount in turn_directions:
+                        if second_segment_added:
+                            break
+                            
+                        second_dir_idx = (first_dir_idx + turn_amount) % 8
+                        dx, dy = directions[second_dir_idx]
                         
-                    second_dir_idx = (first_dir_idx + turn_amount) % 8
-                    dx, dy = directions[second_dir_idx]
-                    
-                    # Calculate second segment length based on percentage of max_total_length
-                    segment2_percent = random.randint(segment2_min_percent, segment2_max_percent)
-                    segment2_target_length = int(max_total_length * (segment2_percent / 100))
-                    
-                    # Ensure we don't exceed remaining length
-                    segment2_length = min(segment2_target_length, remaining_length)
-                    
-                    # Ensure minimum length for second segment is at least 10 pixels
-                    segment2_length = max(10, segment2_length)
-                    
-                    # Calculate end point of second segment
-                    next_x = pos_x + dx * segment2_length
-                    next_y = pos_y + dy * segment2_length
-                    
-                    # Ensure we don't go outside the canvas bounds
-                    if next_x < 0:
-                        next_x = 0
-                    elif next_x > width:
-                        next_x = width
+                        # Calculate second segment length based on percentage of max_total_length
+                        segment2_percent = random.randint(segment2_min_percent, segment2_max_percent)
+                        segment2_target_length = int(max_total_length * (segment2_percent / 100))
                         
-                    if next_y < grid_size:
-                        next_y = grid_size
-                    elif next_y > height - grid_size:
-                        next_y = height - grid_size
-                    
-                    # Potential second segment
-                    second_segment = (pos_x, pos_y, next_x, next_y)
-                    
-                    # Check if second segment would collide with any existing element
-                    # We need to check against all segments except those in the current path
-                    existing_segments = [seg for seg in track_segments if seg != first_segment]
-                    segment_collision = check_segment_collision(
-                        second_segment, 
-                        existing_segments, 
-                        balls, 
-                        track_width, 
-                        min_element_distance
-                    )
-                    
-                    if not segment_collision:
-                        # This direction works, add the segment
-                        path_points.append((next_x, next_y))
-                        path_segments.append(second_segment)
-                        pos_x, pos_y = next_x, next_y
-                        second_segment_added = True
+                        # Ensure we don't exceed remaining length
+                        segment2_length = min(segment2_target_length, remaining_length)
                         
-                        # Track turn direction for balance check
-                        if turn_amount < 0:  # Left turn
-                            left_turns += 1
-                        else:  # Right turn
-                            right_turns += 1
+                        # Ensure minimum length for second segment is at least 10 pixels
+                        segment2_length = max(10, segment2_length)
                         
-                        # Recalculate actual segment length after bounds check
-                        actual_segment2_length = math.sqrt((second_segment[2] - second_segment[0])**2 + 
-                                                        (second_segment[3] - second_segment[1])**2)
-                        remaining_length -= actual_segment2_length
-            
-                # If we added a second segment and need a third
-                if second_segment_added and num_segments > 2 and remaining_length > 10:
-                    # Third segment is parallel to first (same direction)
-                    dx, dy = directions[first_dir_idx]
-                    
-                    # Calculate third segment length based on percentage of segment1 length
-                    segment3_percent = random.randint(segment3_min_percent, segment3_max_percent)
-                    segment3_target_length = int(segment1_length * (segment3_percent / 100))
-                    
-                    # Ensure we don't exceed remaining length
-                    segment3_length = min(segment3_target_length, remaining_length)
-                    
-                    # Ensure minimum length for third segment is at least 10 pixels
-                    segment3_length = max(10, segment3_length)
-                    
-                    # Try decreasing lengths until we find one that doesn't intersect
-                    segment_attempts = 5
-                    third_segment_added = False
-                    
-                    for seg_attempt in range(segment_attempts):
-                        # Calculate percentage for this attempt (decrease by 20% each time)
-                        percent_factor = 1.0 - (seg_attempt * 0.2)
-                        current_length = int(segment3_length * percent_factor)
-                        
-                        # Ensure minimum length
-                        current_length = max(10, current_length)
-                        
-                        # Calculate end point of third segment
-                        next_x = pos_x + dx * current_length
-                        next_y = pos_y + dy * current_length
+                        # Calculate end point of second segment
+                        next_x = pos_x + dx * segment2_length
+                        next_y = pos_y + dy * segment2_length
                         
                         # Ensure we don't go outside the canvas bounds
                         if next_x < 0:
@@ -348,14 +293,14 @@ def generate_bottom_up_pattern(width, height,
                         elif next_y > height - grid_size:
                             next_y = height - grid_size
                         
-                        # Potential third segment
-                        third_segment = (pos_x, pos_y, next_x, next_y)
+                        # Potential second segment
+                        second_segment = (pos_x, pos_y, next_x, next_y)
                         
-                        # Check if third segment would collide with any existing element
+                        # Check if second segment would collide with any existing element
                         # We need to check against all segments except those in the current path
-                        existing_segments = [seg for seg in track_segments if seg != first_segment and seg != second_segment]
+                        existing_segments = [seg for seg in track_segments if seg != first_segment]
                         segment_collision = check_segment_collision(
-                            third_segment, 
+                            second_segment, 
                             existing_segments, 
                             balls, 
                             track_width, 
@@ -363,15 +308,100 @@ def generate_bottom_up_pattern(width, height,
                         )
                         
                         if not segment_collision:
-                            # This length works, add the segment
+                            # This direction works, add the segment
                             path_points.append((next_x, next_y))
-                            path_segments.append(third_segment)
-                            third_segment_added = True
-                            break
-                    
-                    # If we couldn't add a third segment after multiple attempts, that's fine
-                    # We'll just use what we have
+                            path_segments.append(second_segment)
+                            pos_x, pos_y = next_x, next_y
+                            second_segment_added = True
+                            
+                            # Track turn direction for balance check
+                            if turn_amount < 0:  # Left turn
+                                left_turns += 1
+                            else:  # Right turn
+                                right_turns += 1
+                            
+                            # Recalculate actual segment length after bounds check
+                            actual_segment2_length = math.sqrt((second_segment[2] - second_segment[0])**2 + 
+                                                            (second_segment[3] - second_segment[1])**2)
+                            remaining_length -= actual_segment2_length
+                
+                    # If we added a second segment and need a third
+                    if second_segment_added and num_segments > 2 and remaining_length > 10:
+                        # Third segment is parallel to first (same direction)
+                        dx, dy = directions[first_dir_idx]
+                        
+                        # Calculate third segment length based on percentage of segment1 length
+                        # Allow segment3 to be larger, up to 100% of segment1's length
+                        segment3_percent = random.randint(segment3_min_percent, 100)
+                        segment3_target_length = int(segment1_length * (segment3_percent / 100))
+                        
+                        # Ensure we don't exceed remaining length
+                        segment3_length = min(segment3_target_length, remaining_length)
+                        
+                        # Ensure minimum length for third segment is at least 10 pixels
+                        segment3_length = max(10, segment3_length)
+                        
+                        # Try decreasing lengths until we find one that doesn't intersect
+                        segment_attempts = 5
+                        third_segment_added = False
+                        
+                        for seg_attempt in range(segment_attempts):
+                            # Calculate percentage for this attempt (decrease by 20% each time)
+                            percent_factor = 1.0 - (seg_attempt * 0.2)
+                            current_length = int(segment3_length * percent_factor)
+                            
+                            # Ensure minimum length
+                            current_length = max(10, current_length)
+                            
+                            # Calculate end point of third segment
+                            next_x = pos_x + dx * current_length
+                            next_y = pos_y + dy * current_length
+                            
+                            # Ensure we don't go outside the canvas bounds
+                            if next_x < 0:
+                                next_x = 0
+                            elif next_x > width:
+                                next_x = width
+                                
+                            if next_y < grid_size:
+                                next_y = grid_size
+                            elif next_y > height - grid_size:
+                                next_y = height - grid_size
+                            
+                            # Potential third segment
+                            third_segment = (pos_x, pos_y, next_x, next_y)
+                            
+                            # Check if third segment would collide with any existing element
+                            # We need to check against all segments except those in the current path
+                            existing_segments = [seg for seg in track_segments if seg != first_segment and seg != second_segment]
+                            segment_collision = check_segment_collision(
+                                third_segment, 
+                                existing_segments, 
+                                balls, 
+                                track_width, 
+                                min_element_distance
+                            )
+                            
+                            if not segment_collision:
+                                # This length works, add the segment
+                                path_points.append((next_x, next_y))
+                                path_segments.append(third_segment)
+                                third_segment_added = True
+                                break
+                        
+                        # If we couldn't add a third segment after multiple attempts, 
+                        # try again with another shift position (if this is not the last attempt)
+                        if not third_segment_added and num_segments == 3 and shift_attempt < 4:
+                            # Skip to the next shift attempt
+                            continue
+                
+                # If we've reached here without continuing, we have a valid path
+                break
             
+            # If we didn't create any valid segments after all attempts, skip this line
+            if not path_segments:
+                continue
+                
             # Draw all valid segments
             for x1, y1, x2, y2 in path_segments:
                 # Skip segments with identical start and end points
@@ -449,6 +479,40 @@ def check_segment_collision(segment, existing_segments, balls, track_width, min_
     for other_segment in existing_segments:
         if line_segments_intersect(segment, other_segment):
             return True
+        
+        # Check for parallel segments that are too close
+        # Get both segment vectors
+        segment_vec = (segment[2] - segment[0], segment[3] - segment[1])
+        other_vec = (other_segment[2] - other_segment[0], other_segment[3] - other_segment[1])
+        
+        # Normalize vectors
+        segment_len = math.sqrt(segment_vec[0]**2 + segment_vec[1]**2)
+        other_len = math.sqrt(other_vec[0]**2 + other_vec[1]**2)
+        
+        if segment_len > 0 and other_len > 0:
+            segment_vec_norm = (segment_vec[0]/segment_len, segment_vec[1]/segment_len)
+            other_vec_norm = (other_vec[0]/other_len, other_vec[1]/other_len)
+            
+            # Dot product to check if parallel (will be close to 1 or -1 if parallel)
+            dot_product = segment_vec_norm[0]*other_vec_norm[0] + segment_vec_norm[1]*other_vec_norm[1]
+            
+            if abs(abs(dot_product) - 1) < 0.1:  # Segments are nearly parallel
+                # Check shortest distance between segments
+                segment_x1, segment_y1, segment_x2, segment_y2 = segment
+                other_x1, other_y1, other_x2, other_y2 = other_segment
+                
+                # Check distance from each endpoint of one segment to the other segment
+                dist1 = point_to_line_segment_distance(segment_x1, segment_y1, other_x1, other_y1, other_x2, other_y2)
+                dist2 = point_to_line_segment_distance(segment_x2, segment_y2, other_x1, other_y1, other_x2, other_y2)
+                dist3 = point_to_line_segment_distance(other_x1, other_y1, segment_x1, segment_y1, segment_x2, segment_y2)
+                dist4 = point_to_line_segment_distance(other_x2, other_y2, segment_x1, segment_y1, segment_x2, segment_y2)
+                
+                min_dist = min(dist1, dist2, dist3, dist4)
+                
+                # Require more distance for parallel segments
+                required_clearance = track_width + min_distance/2
+                if min_dist < required_clearance:
+                    return True
     
     # Check for collisions with existing balls
     segment_x1, segment_y1, segment_x2, segment_y2 = segment
