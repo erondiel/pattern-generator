@@ -46,15 +46,27 @@ def main():
     # Grid-based dimension controls
     st.sidebar.subheader("Grid Dimensions")
     grid_cols = st.sidebar.number_input("Grid Columns", min_value=3, max_value=100, value=20)
-    # Calculate grid rows based on 4:3 vertical aspect ratio (height:width = 4:3)
-    grid_rows = int((4/3) * grid_cols)
+    
+    # Different approach for dimensions based on pattern type
+    if pattern_type == PatternType.CIRCUIT:
+        # For Circuit pattern, allow independent control of rows
+        grid_rows = st.sidebar.number_input("Grid Rows", min_value=3, max_value=100, value=20)
+    else:
+        # For Bottom-Up pattern, keep fixed 4:3 aspect ratio
+        # Calculate grid rows based on 4:3 vertical aspect ratio (height:width = 4:3)
+        grid_rows = int((4/3) * grid_cols)
     
     # Calculate actual pixel dimensions
     width = (grid_cols + 1) * grid_size
     height = (grid_rows + 1) * grid_size
     
-    # Show actual pixel dimensions
-    st.sidebar.text(f"Canvas: {width}px × {height}px (4:3 vertical ratio)")
+    # Show dimensions based on pattern type
+    if pattern_type == PatternType.CIRCUIT:
+        st.sidebar.text(f"Canvas: {width}px × {height}px")
+    else:
+        st.sidebar.text(f"Canvas: {width}px × {height}px (4:3 vertical ratio)")
+    
+    # Show grid cell info
     st.sidebar.text(f"Grid: {grid_cols}×{grid_rows} = {grid_cols * grid_rows} cells")
     
     # Color controls side by side with fixed layout

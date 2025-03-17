@@ -282,16 +282,55 @@ def generate_bottom_up_pattern(width, height,
                         next_x = pos_x + dx * segment2_length
                         next_y = pos_y + dy * segment2_length
                         
-                        # Ensure we don't go outside the canvas bounds
-                        if next_x < 0:
-                            next_x = 0
-                        elif next_x > width:
-                            next_x = width
+                        # Ensure we don't go outside the canvas bounds while maintaining the 45-degree angle
+                        # Check if we would go outside the boundaries
+                        needs_adjustment = False
+                        if next_x < 0 or next_x > width or next_y < grid_size or next_y > height - grid_size:
+                            needs_adjustment = True
                             
-                        if next_y < grid_size:
-                            next_y = grid_size
-                        elif next_y > height - grid_size:
-                            next_y = height - grid_size
+                            # Calculate the intersection points with each boundary
+                            # We need to reduce segment2_length to reach the closest boundary
+                            # while maintaining the 45-degree angle
+                            
+                            # For horizontal boundary (top or bottom)
+                            if dy != 0:  # Not horizontal direction
+                                if next_y < grid_size:  # Top boundary
+                                    y_boundary = grid_size
+                                    scale_y = (y_boundary - pos_y) / dy
+                                    adjusted_x = pos_x + dx * scale_y
+                                    if 0 <= adjusted_x <= width:
+                                        next_y = y_boundary
+                                        next_x = adjusted_x
+                                        segment2_length = abs(scale_y)  # Update segment length
+                                        
+                                elif next_y > height - grid_size:  # Bottom boundary
+                                    y_boundary = height - grid_size
+                                    scale_y = (y_boundary - pos_y) / dy
+                                    adjusted_x = pos_x + dx * scale_y
+                                    if 0 <= adjusted_x <= width:
+                                        next_y = y_boundary
+                                        next_x = adjusted_x
+                                        segment2_length = abs(scale_y)  # Update segment length
+                            
+                            # For vertical boundary (left or right)
+                            if dx != 0:  # Not vertical direction
+                                if next_x < 0:  # Left boundary
+                                    x_boundary = 0
+                                    scale_x = (x_boundary - pos_x) / dx
+                                    adjusted_y = pos_y + dy * scale_x
+                                    if grid_size <= adjusted_y <= height - grid_size:
+                                        next_x = x_boundary
+                                        next_y = adjusted_y
+                                        segment2_length = abs(scale_x)  # Update segment length
+                                        
+                                elif next_x > width:  # Right boundary
+                                    x_boundary = width
+                                    scale_x = (x_boundary - pos_x) / dx
+                                    adjusted_y = pos_y + dy * scale_x
+                                    if grid_size <= adjusted_y <= height - grid_size:
+                                        next_x = x_boundary
+                                        next_y = adjusted_y
+                                        segment2_length = abs(scale_x)  # Update segment length
                         
                         # Potential second segment
                         second_segment = (pos_x, pos_y, next_x, next_y)
